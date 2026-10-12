@@ -33,8 +33,8 @@ Bothost — управляемый хостинг ботов: серверов �
 
    **Переменные окружения** (раздел в форме):
    ```
-   ADMIN_IDS=1188594848
-   MANAGER_USERNAME=Des1re17
+   ADMIN_IDS=<ваш числовой Telegram ID, узнать у @userinfobot>
+   MANAGER_USERNAME=<тег менеджера без @>
    DATABASE_PATH=/app/data/detail_lab.db
    ```
    При необходимости: `TIMEZONE`, `STUDIO_PHONE`, `STUDIO_ADDRESS`, `DEMO_MODE=false` (см. `.env.example`).
