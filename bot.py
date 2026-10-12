@@ -7,6 +7,7 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramUnauthorizedError
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -67,8 +68,13 @@ def build_dispatcher(settings: Settings, repo: Repository) -> Dispatcher:
 
 
 def build_bot(settings: Settings) -> Bot:
+    # aiogram кэширует DNS на час; при VPN/смене сети адрес api.telegram.org меняется, и бот
+    # «залипает» на мёртвом IP. Короткий TTL лечит это без перезапуска.
+    session = AiohttpSession()
+    session._connector_init["ttl_dns_cache"] = 30
     return Bot(
         token=settings.bot_token,
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML, link_preview_is_disabled=True),
     )
 
