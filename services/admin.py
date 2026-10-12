@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 from database.models import Booking, BookingStatus, Stats, StatusResult
 from database.repository import Repository
+from services.backup import make_backup
 from services.export import bookings_to_csv
 
 PAGE_SIZE = 8
@@ -83,3 +85,7 @@ class AdminService:
     async def export_csv(self, actor_id: int | None) -> bytes:
         self._require(actor_id)
         return bookings_to_csv(await self._repo.iter_all_bookings())
+
+    async def backup(self, actor_id: int | None, backup_dir: Path, keep: int = 7) -> Path:
+        self._require(actor_id)
+        return await make_backup(self._repo, backup_dir, keep=keep)

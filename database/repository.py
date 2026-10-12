@@ -25,6 +25,14 @@ class Repository:
         # Все записи выполняются под одним замком, чтобы транзакции корутин не переплетались.
         self._write_lock = asyncio.Lock()
 
+    # ---------------------------------------------------------------- backup
+    async def snapshot_to(self, path: str) -> None:
+        """Консистентный снимок базы в отдельный файл (VACUUM INTO) — безопасно при работающем боте."""
+        conn = self._db.conn
+        async with self._write_lock:
+            await conn.commit()
+            await conn.execute("VACUUM INTO ?", (str(path),))
+
     # ---------------------------------------------------------------- users
     async def upsert_user(self, tg_id: int, username: str | None, full_name: str | None) -> None:
         now = utcnow()

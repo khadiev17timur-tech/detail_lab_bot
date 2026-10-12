@@ -42,7 +42,8 @@ def panel_kb(new_count: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton(text="📋 Все заявки", callback_data=Adm(a="list", f="all").pack())],
         [InlineKeyboardButton(text="🔎 По статусу", callback_data=Adm(a="filters").pack()),
          InlineKeyboardButton(text="📊 Статистика", callback_data=Adm(a="stats").pack())],
-        [InlineKeyboardButton(text="📤 Выгрузить CSV", callback_data=Adm(a="csv").pack())],
+        [InlineKeyboardButton(text="📤 Выгрузить CSV", callback_data=Adm(a="csv").pack()),
+         InlineKeyboardButton(text="💾 Бэкап базы", callback_data=Adm(a="backup").pack())],
         [InlineKeyboardButton(text="✖️ Закрыть", callback_data=Adm(a="close").pack())],
     ])
 

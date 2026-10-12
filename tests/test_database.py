@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import sqlite3
 import io
 
 import pytest
@@ -190,3 +191,32 @@ async def test_admin_service_allows_admins_and_paginates(repo):
     assert len(await admin.last(900)) == 10
     res = await admin.change_status(900, 1, BookingStatus.ACCEPTED)
     assert res.changed
+
+
+async def test_journal_mode_falls_back_when_wal_unavailable(tmp_path, monkeypatch, caplog):
+    """На файловых системах без WAL бот должен работать в обычном режиме, а не падать."""
+    import logging
+    import aiosqlite
+    from database.connection import Database as Db
+
+    real_execute = aiosqlite.Connection.execute
+
+    def fake_execute(self, sql, *args, **kwargs):   # обычная функция: aiosqlite.execute — не корутина
+        if "journal_mode = WAL" in sql:
+            raise sqlite3.OperationalError("disk I/O error")
+        return real_execute(self, sql, *args, **kwargs)
+
+    monkeypatch.setattr(aiosqlite.Connection, "execute", fake_execute)
+    db = Db(tmp_path / "nowal.db")
+    try:
+        with caplog.at_level(logging.WARNING):
+            await db.connect()
+        repo = Repository(db)
+        await repo.upsert_user(10, "u", "U")
+        b, created = await repo.create_booking(nb())
+        assert created and b.id == 1
+        async with db.conn.execute("PRAGMA journal_mode") as cur:
+            assert (await cur.fetchone())[0].lower() == "delete"
+        assert "WAL недоступен" in caplog.text
+    finally:
+        await db.close()

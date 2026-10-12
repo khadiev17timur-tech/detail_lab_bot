@@ -30,6 +30,13 @@ class Settings:
     portfolio_dir: Path
     log_level: str
     studio: Studio
+    backup_enabled: bool = True
+    backup_send_to_admins: bool = True
+    backup_keep: int = 7
+
+    @property
+    def backup_dir(self) -> Path:
+        return self.db_path.parent / "backups"
 
     def __repr__(self) -> str:  # токен никогда не попадает в логи
         return (
@@ -60,6 +67,15 @@ def _parse_bool(raw: str | None, default: bool) -> bool:
     if raw is None or raw.strip() == "":
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on", "да"}
+
+
+def _parse_keep(raw: str | None) -> int:
+    value = (raw or "").strip()
+    if not value:
+        return 7
+    if not value.isdigit() or int(value) < 1:
+        raise ConfigError("BACKUP_KEEP: укажите целое число копий >= 1.")
+    return int(value)
 
 
 def _clean_url(name: str, raw: str | None) -> str | None:
@@ -142,4 +158,7 @@ def load_settings(env: Mapping[str, str] | None = None, env_file: Path | None = 
         portfolio_dir=BASE_DIR / "assets" / "portfolio",
         log_level=log_level,
         studio=_build_studio(env),
+        backup_enabled=_parse_bool(env.get("AUTO_BACKUP"), True),
+        backup_send_to_admins=_parse_bool(env.get("BACKUP_SEND_TO_ADMINS"), True),
+        backup_keep=_parse_keep(env.get("BACKUP_KEEP")),
     )

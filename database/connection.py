@@ -82,7 +82,7 @@ class Database:
             await conn.execute("PRAGMA foreign_keys = ON")
             await conn.execute("PRAGMA busy_timeout = 5000")
             if self.path != ":memory:":
-                await conn.execute("PRAGMA journal_mode = WAL")
+                await self._enable_wal(conn)
             await conn.executescript(SCHEMA)
             await conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             await conn.commit()
@@ -91,6 +91,19 @@ class Database:
             raise
         self._conn = conn
         log.info("База данных готова: %s", self.path)
+
+    @staticmethod
+    async def _enable_wal(conn: aiosqlite.Connection) -> None:
+        """WAL быстрее и безопаснее при работе бота, но на некоторых файловых системах
+        хостингов (сетевые/виртуальные диски) он не поддерживается — тогда обычный режим журнала."""
+        try:
+            cur = await conn.execute("PRAGMA journal_mode = WAL")
+            mode = str((await cur.fetchone())[0]).lower()
+        except Exception as exc:  # noqa: BLE001
+            mode = f"ошибка: {exc}"
+        if mode != "wal":
+            log.warning("Режим WAL недоступен (%s) — использую обычный журнал DELETE", mode)
+            await conn.execute("PRAGMA journal_mode = DELETE")
 
     async def close(self) -> None:
         if self._conn is not None:

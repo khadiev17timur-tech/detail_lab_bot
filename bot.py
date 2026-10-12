@@ -11,13 +11,14 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramNetworkError, TelegramUnauthorizedError
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
+from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent, FSInputFile
 
 from config import ConfigError, Settings, load_settings
 from database import Database, Repository
 from handlers import build_root_router
 from middlewares.users import UserMiddleware
 from services.admin import AdminService, PermissionDenied
+from services.backup import BackupError, make_backup, seconds_until
 from utils.logging_setup import setup_logging
 
 log = logging.getLogger("detail_lab")
@@ -33,6 +34,10 @@ USER_COMMANDS = [
     BotCommand(command="contacts", description="Контакты"),
     BotCommand(command="manager", description="Связаться с менеджером"),
     BotCommand(command="cancel", description="Отменить действие"),
+]
+ADMIN_ONLY_COMMANDS = [
+    BotCommand(command="admin", description="Панель администратора"),
+    BotCommand(command="backup", description="Резервная копия базы"),
 ]
 
 
@@ -82,7 +87,7 @@ def build_bot(settings: Settings) -> Bot:
 async def setup_commands(bot: Bot, settings: Settings) -> None:
     try:
         await bot.set_my_commands(USER_COMMANDS)
-        admin_commands = USER_COMMANDS + [BotCommand(command="admin", description="Панель администратора")]
+        admin_commands = USER_COMMANDS + ADMIN_ONLY_COMMANDS
         for admin_id in settings.admin_ids:
             try:
                 await bot.set_my_commands(admin_commands, scope=BotCommandScopeChat(chat_id=admin_id))
@@ -90,6 +95,33 @@ async def setup_commands(bot: Bot, settings: Settings) -> None:
                 pass  # админ ещё не открывал бота — команда /admin всё равно работает
     except TelegramAPIError as exc:
         log.warning("Не удалось установить список команд: %s", exc)
+
+
+BACKUP_HOUR, BACKUP_MINUTE = 3, 30   # по времени студии
+
+
+async def run_backup_once(bot: Bot, repo: Repository, settings: Settings) -> None:
+    """Одна резервная копия: на диск рядом с базой и (если включено) файлом админам в Telegram."""
+    path = await make_backup(repo, settings.backup_dir, keep=settings.backup_keep)
+    log.info("Резервная копия готова: %s", path.name)
+    if not settings.backup_send_to_admins:
+        return
+    for admin_id in settings.admin_ids:
+        try:
+            await bot.send_document(admin_id, FSInputFile(path),
+                                    caption="💾 Ночная резервная копия базы. Храните в надёжном месте: в ней данные клиентов.")
+        except TelegramAPIError as exc:
+            log.warning("Не удалось отправить копию администратору %s: %s", admin_id, exc)
+
+
+async def backup_scheduler(bot: Bot, repo: Repository, settings: Settings) -> None:
+    """Каждую ночь делает копию. Ошибки логируются, но планировщик не останавливается."""
+    while True:
+        await asyncio.sleep(seconds_until(BACKUP_HOUR, BACKUP_MINUTE, settings.studio.timezone))
+        try:
+            await run_backup_once(bot, repo, settings)
+        except (BackupError, Exception):  # noqa: BLE001 - планировщик не должен падать
+            log.exception("Ночная резервная копия не удалась")
 
 
 # Коды выхода. systemd-юнит не перезапускает сервис при 2 и 3 (бессмысленно: нужно править настройки).
@@ -137,7 +169,16 @@ async def main(check_only: bool = False) -> int:
         await bot.delete_webhook(drop_pending_updates=False)
         log.info("Бот @%s запущен. Админов: %d. База: %s", me.username, len(settings.admin_ids), settings.db_path)
         await setup_commands(bot, settings)
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        backup_task = None
+        if settings.backup_enabled:
+            backup_task = asyncio.create_task(backup_scheduler(bot, repo, settings), name="backup")
+            log.info("Автобэкап включён: ежедневно в %02d:%02d (%s), копий хранится: %d, папка: %s",
+                     BACKUP_HOUR, BACKUP_MINUTE, settings.studio.timezone, settings.backup_keep, settings.backup_dir)
+        try:
+            await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        finally:
+            if backup_task:
+                backup_task.cancel()
         log.info("Остановка по сигналу: polling завершён")
         return EXIT_OK
     finally:

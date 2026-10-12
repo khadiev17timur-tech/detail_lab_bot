@@ -184,7 +184,7 @@ async def test_text_back_on_phone_step_and_cancel(env):
     await env.click(CLIENT_ID, "Мойка кузова")
     await env.send(CLIENT_ID, "Kia Rio")
     await env.click(CLIENT_ID, "Компактный")
-    await env.click(CLIENT_ID, "Сегодня")
+    await env.click(CLIENT_ID, "Завтра")
     await env.click(CLIENT_ID, "Любое время")
     await env.send(CLIENT_ID, "Мария")
     assert "номер телефона" in env.last_text(CLIENT_ID)

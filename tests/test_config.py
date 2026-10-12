@@ -55,3 +55,14 @@ def test_database_path_env_and_legacy_alias(tmp_path):
     assert str(legacy.db_path) == "/srv/old.db"
     both = load_settings(env(DATABASE_PATH="/a.db", DB_PATH="/b.db"))
     assert str(both.db_path) == "/a.db"          # новое имя главнее старого
+
+
+def test_backup_settings(tmp_path):
+    s = load_settings(env(DATABASE_PATH=str(tmp_path / "x" / "db.sqlite")))
+    assert s.backup_enabled and s.backup_send_to_admins and s.backup_keep == 7
+    assert s.backup_dir == tmp_path / "x" / "backups"
+    s2 = load_settings(env(AUTO_BACKUP="false", BACKUP_SEND_TO_ADMINS="0", BACKUP_KEEP="14"))
+    assert not s2.backup_enabled and not s2.backup_send_to_admins and s2.backup_keep == 14
+    for bad in ("0", "abc", "-1"):
+        with pytest.raises(ConfigError):
+            load_settings(env(BACKUP_KEEP=bad))

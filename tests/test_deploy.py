@@ -11,14 +11,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 DEPLOY = ROOT / "deploy"
-SCRIPTS = ["install.sh", "update.sh", "upload.sh", "backup.sh"]
+SCRIPTS = ["install.sh", "update.sh", "upload.sh", "backup.sh", "make_archive.sh"]
 UNITS = ["detail-lab.service", "detail-lab-backup.service", "detail-lab-backup.timer"]
 HAS_BASH = shutil.which("bash") is not None
 HAS_SQLITE_CLI = shutil.which("sqlite3") is not None
 
 
 def test_all_deploy_files_exist():
-    for name in SCRIPTS + UNITS + ["DEPLOY.md"]:
+    for name in SCRIPTS + UNITS + ["DEPLOY.md", "BOTHOST.md", "make_archive.sh"]:
         assert (DEPLOY / name).is_file(), name
     assert (ROOT / "constraints.txt").is_file()
 
@@ -91,9 +91,10 @@ def test_constraints_pin_runtime_dependencies():
     pins = (ROOT / "constraints.txt").read_text()
     for pkg in ("aiogram==", "aiosqlite==", "python-dotenv=="):
         assert pkg in pins
-    for req in (ROOT / "requirements.txt").read_text().split():
-        name = re.split(r"[<>=!~]", req)[0].lower().replace("_", "-")
-        if name and not name.startswith("#"):
+    for line in (ROOT / "requirements.txt").read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            name = re.split(r"[<>=!~]", line)[0].lower().replace("_", "-")
             assert name in pins.lower(), name
 
 

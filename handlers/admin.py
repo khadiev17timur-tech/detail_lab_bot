@@ -6,13 +6,14 @@ import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import BaseFilter, Command
-from aiogram.types import BufferedInputFile, CallbackQuery, Message, TelegramObject
+from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, Message, TelegramObject
 
 from config import Settings
 from database.models import STATUS_LABELS, BookingStatus, parse_status
 from keyboards import admin as akb
 from keyboards.callbacks import Adm
 from services.admin import LAST_N, AdminService
+from services.backup import BackupError
 from services.formatting import admin_booking_card, stats_text
 from services.notifications import notify_client_status
 from utils.telegram import ack, message_of, respond
@@ -172,8 +173,37 @@ async def cb_csv(cb: CallbackQuery, admin: AdminService, settings: Settings) -> 
     )
 
 
+async def _send_backup(event, admin: AdminService, settings: Settings) -> None:
+    uid = event.from_user.id
+    msg = message_of(event)
+    if msg is None:
+        return
+    try:
+        path = await admin.backup(uid, settings.backup_dir, settings.backup_keep)
+    except BackupError as exc:
+        log.error("Ручной бэкап не удался: %s", exc)
+        await msg.answer("⚠️ Не удалось сделать резервную копию. Подробности — в логах бота.")
+        return
+    await msg.answer_document(
+        FSInputFile(path),
+        caption=("💾 Резервная копия базы (SQLite, сжата gzip). Храните её в надёжном месте: в ней данные клиентов. "
+                 "Распаковать: gunzip " + path.name),
+    )
+
+
+@admin_router.message(Command("backup"))
+async def cmd_backup(message: Message, admin: AdminService, settings: Settings) -> None:
+    await _send_backup(message, admin, settings)
+
+
+@admin_router.callback_query(Adm.filter(F.a == "backup"))
+async def cb_backup(cb: CallbackQuery, admin: AdminService, settings: Settings) -> None:
+    await ack(cb, "Делаю копию…")
+    await _send_backup(cb, admin, settings)
+
+
 # ------------------------------------------------------------------ отказ
-@deny_router.message(Command("admin"))
+@deny_router.message(Command("admin", "backup"))
 async def deny_message(message: Message) -> None:
     await message.answer(NO_ACCESS)
 
