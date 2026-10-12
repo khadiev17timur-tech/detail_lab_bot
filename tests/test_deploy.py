@@ -147,3 +147,15 @@ class TestBackupScript:
         assert self._run(tmp_path, BACKUP_KEEP="0").returncode != 0     # неверный параметр
         leftovers = list((tmp_path / "bk").glob("*")) if (tmp_path / "bk").exists() else []
         assert leftovers == []
+
+
+def test_dockerfile_is_safe_for_bothost():
+    text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert text.isascii(), "Bothost плохо читает не-ASCII в Dockerfile"
+    assert "FROM python:3.12" in text and 'CMD ["python", "bot.py"]' in text
+    assert "WORKDIR /usr/src/app" in text            # код вне /app: его не перекрывает bind mount
+    assert "/app/data" in text and "DATABASE_PATH=/app/data/" in text
+    assert "COPY . ." in text
+    ignore = (ROOT / ".dockerignore").read_text()
+    for entry in (".env", "data", ".venv", ".git"):
+        assert entry in ignore
