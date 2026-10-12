@@ -46,3 +46,12 @@ def test_studio_overrides_and_validation():
                 {"LOG_LEVEL": "LOUD"}):
         with pytest.raises(ConfigError):
             load_settings(env(**bad))
+
+
+def test_database_path_env_and_legacy_alias(tmp_path):
+    new = load_settings(env(DATABASE_PATH="/var/lib/detail-lab/detail_lab.db"))
+    assert str(new.db_path) == "/var/lib/detail-lab/detail_lab.db"
+    legacy = load_settings(env(DB_PATH="/srv/old.db"))
+    assert str(legacy.db_path) == "/srv/old.db"
+    both = load_settings(env(DATABASE_PATH="/a.db", DB_PATH="/b.db"))
+    assert str(both.db_path) == "/a.db"          # новое имя главнее старого

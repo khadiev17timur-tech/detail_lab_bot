@@ -1,0 +1,57 @@
+# /etc/systemd/system/detail-lab.service
+[Unit]
+Description=DETAIL LAB Telegram bot
+Documentation=file:///opt/detail-lab/app/deploy/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+# Не уходим в бесконечную петлю при поломке: 20 неудачных стартов за 10 минут — и systemd остановится.
+StartLimitIntervalSec=600
+StartLimitBurst=20
+
+[Service]
+Type=simple
+User=detail-lab
+Group=detail-lab
+WorkingDirectory=/opt/detail-lab/app
+# Секреты читает systemd (файл root:detail-lab, 0640); в логи и в git они не попадают.
+EnvironmentFile=/etc/detail-lab/detail-lab.env
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/detail-lab/venv/bin/python bot.py
+
+# Перезапуск при падении/OOM/обрыве. Коды 2 (ошибка настроек) и 3 (Telegram отклонил токен)
+# перезапускать бессмысленно — сервис останавливается, причина видна в journalctl.
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=2 3
+
+# Корректная остановка: SIGTERM -> aiogram завершает polling и закрывает базу.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Постоянные данные (SQLite) живут вне кода: /var/lib/detail-lab. systemd создаёт каталог
+# с нужным владельцем, обновление кода его не затрагивает.
+StateDirectory=detail-lab
+StateDirectoryMode=0750
+UMask=0077
+
+# Ограничение ресурсов для VPS на 1 ГБ (бот обычно занимает ~50 МБ).
+MemoryMax=512M
+TasksMax=64
+
+# Песочница
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

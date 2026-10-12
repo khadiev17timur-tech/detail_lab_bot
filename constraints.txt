@@ -1,0 +1,23 @@
+# Точные версии, на которых бот проверен (python 3.12). Используется в deploy/update.sh:
+# pip install -r requirements.txt -c constraints.txt
+aiofiles==24.1.0
+aiogram==3.22.0
+aiohappyeyeballs==2.6.1
+aiohttp==3.12.15
+aiosignal==1.4.0
+aiosqlite==0.22.1
+annotated-types==0.7.0
+attrs==26.1.0
+certifi==2026.7.22
+frozenlist==1.8.0
+idna==3.20
+magic-filter==1.0.12
+multidict==6.7.1
+propcache==0.4.1
+pydantic==2.11.10
+pydantic-core==2.33.2
+python-dotenv==1.2.1
+typing-extensions==4.16.0
+typing-inspection==0.4.2
+tzdata==2026.5
+yarl==1.22.0

@@ -1,0 +1,18 @@
+# /etc/systemd/system/detail-lab-backup.service — разовый запуск резервного копирования
+[Unit]
+Description=DETAIL LAB: резервная копия SQLite
+
+[Service]
+Type=oneshot
+User=detail-lab
+Group=detail-lab
+EnvironmentFile=/etc/detail-lab/detail-lab.env
+ExecStart=/bin/bash /opt/detail-lab/app/deploy/backup.sh
+UMask=0077
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# SQLite в режиме WAL при чтении тоже пишет служебный файл -shm, поэтому каталог базы доступен на запись.
+ReadWritePaths=/var/lib/detail-lab /var/backups/detail-lab

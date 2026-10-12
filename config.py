@@ -125,7 +125,8 @@ def load_settings(env: Mapping[str, str] | None = None, env_file: Path | None = 
             "BOT_TOKEN выглядит неверно. Ожидается формат 123456789:AA... — возьмите токен в @BotFather."
         )
 
-    db_raw = (env.get("DB_PATH") or "data/detail_lab.db").strip()
+    # DATABASE_PATH — основное имя; DB_PATH принимается для обратной совместимости.
+    db_raw = (env.get("DATABASE_PATH") or env.get("DB_PATH") or "data/detail_lab.db").strip()
     db_path = Path(db_raw)
     if not db_path.is_absolute():
         db_path = BASE_DIR / db_path

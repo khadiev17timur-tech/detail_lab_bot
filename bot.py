@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramAPIError, TelegramUnauthorizedError
+from aiogram.exceptions import TelegramAPIError, TelegramNetworkError, TelegramUnauthorizedError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 
@@ -92,12 +92,28 @@ async def setup_commands(bot: Bot, settings: Settings) -> None:
         log.warning("Не удалось установить список команд: %s", exc)
 
 
+# Коды выхода. systemd-юнит не перезапускает сервис при 2 и 3 (бессмысленно: нужно править настройки).
+EXIT_OK, EXIT_CONFIG, EXIT_TOKEN = 0, 2, 3
+
+
+async def wait_for_telegram(bot: Bot):
+    """get_me с ожиданием сети: после загрузки сервера интернет может появиться не сразу."""
+    delay = 2.0
+    while True:
+        try:
+            return await bot.get_me()
+        except TelegramNetworkError as exc:
+            log.warning("Telegram пока недоступен (%s). Повтор через %.0f с…", type(exc).__name__, delay)
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30.0)
+
+
 async def main(check_only: bool = False) -> int:
     try:
         settings = load_settings()
     except ConfigError as exc:
         print(f"Ошибка конфигурации: {exc}", file=sys.stderr)
-        return 2
+        return EXIT_CONFIG
 
     setup_logging(settings.log_level, secrets=[settings.bot_token])
     if not settings.admin_ids:
@@ -111,16 +127,19 @@ async def main(check_only: bool = False) -> int:
         dp = build_dispatcher(settings, repo)
         if check_only:
             log.info("Проверка пройдена: конфигурация, база данных и обработчики в порядке.")
-            return 0
+            return EXIT_OK
         try:
-            me = await bot.get_me()
+            me = await wait_for_telegram(bot)
         except TelegramUnauthorizedError:
             log.error("Telegram отклонил токен (Unauthorized). Проверьте BOT_TOKEN в .env.")
-            return 1
-        log.info("Бот @%s запущен. Админов: %d", me.username, len(settings.admin_ids))
+            return EXIT_TOKEN
+        # Если когда-то был включён webhook, long polling с ним конфликтует. Очередь апдейтов не трогаем.
+        await bot.delete_webhook(drop_pending_updates=False)
+        log.info("Бот @%s запущен. Админов: %d. База: %s", me.username, len(settings.admin_ids), settings.db_path)
         await setup_commands(bot, settings)
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
-        return 0
+        log.info("Остановка по сигналу: polling завершён")
+        return EXIT_OK
     finally:
         await bot.session.close()
         await db.close()

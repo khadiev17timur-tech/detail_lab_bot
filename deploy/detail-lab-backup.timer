@@ -1,0 +1,12 @@
+# /etc/systemd/system/detail-lab-backup.timer — ежедневно ночью
+[Unit]
+Description=DETAIL LAB: ежедневная резервная копия
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=10min
+# Если сервер был выключен в 03:30 — выполнить сразу после включения.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
