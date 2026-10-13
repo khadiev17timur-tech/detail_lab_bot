@@ -142,3 +142,43 @@ async def test_database_from_newer_version_is_refused(tmp_path):
     db = Database(path)
     with pytest.raises(RuntimeError, match="более новой"):
         await db.connect()
+
+
+# ---------------------------------------------- бот поверх мигрированной боевой базы
+async def test_bot_keeps_working_on_migrated_production_database(tmp_path):
+    """Сквозная проверка: v1-база с данными → запуск бота → старые функции + новые на тех же данных."""
+    from tests.conftest import ADMIN_ID, build_env
+    from tests.test_v2_flows import book
+
+    path = tmp_path / "prod.db"
+    make_v1_db(path)
+    env = await build_env(path, tmp_path)
+    try:
+        # 1) админ видит старые заявки, статистику и может выгрузить CSV (старые статусы читаются)
+        await env.send(ADMIN_ID, "/admin")
+        assert "Всего заявок: 4" in env.last_text(ADMIN_ID)
+        await env.click(ADMIN_ID, "Все заявки")
+        assert "Всего: 4" in env.last_text(ADMIN_ID)
+        await env.click(ADMIN_ID, "№1 ")
+        assert "Заявка №1" in env.last_text(ADMIN_ID) and "+7 999 000-00-01" in env.last_text(ADMIN_ID)
+        await env.click(ADMIN_ID, "Панель")
+        await env.click(ADMIN_ID, "CSV")
+        csv_doc = next(o for o in env.tg.outbox if o.kind == "SendDocument")
+        assert "Иван".encode() in csv_doc.document and "Kia Rio".encode() in csv_doc.document
+        # 2) старый клиент (с заявками из v1) оформляет новую запись, автомобиль подтягивается из его истории
+        await env.repo.set_status(4, __import__("database").BookingStatus.DONE, actor_id=ADMIN_ID)
+        from keyboards.main import BTN_BOOK
+        await env.send(11, BTN_BOOK)
+        await env.click(11, "Мойка кузова")
+        labels = [b.text for o in env.visible(11) for b in env.buttons(o)]
+        assert "🚗 Kia Rio" in labels                                     # авто создано миграцией
+        # 3) новая запись нового клиента проходит полностью поверх старых данных
+        await book(env, 300)
+        assert await env.repo.count_bookings() == 5
+        new = await env.repo.get_booking(5)
+        assert new.id == 5 and new.start_at and new.status.value == "new"
+        # 4) старая заявка с «любым временем» не блокирует календарь и остаётся читаемой
+        legacy = await env.repo.get_booking(3)
+        assert legacy.start_at is None and legacy.visit_time == "any"
+    finally:
+        await env.repo._db.close()

@@ -5,11 +5,10 @@ from datetime import date, datetime, timedelta
 
 from aiogram.types import InlineKeyboardButton as Btn, InlineKeyboardMarkup as Markup
 
-from database.models import Booking, Car, Voucher
+from database.models import Booking, Car
 from keyboards.callbacks import Cab, CarCb, Menu, Mine, Rev, RevC
 from keyboards.main import home_button
 from services.formatting import my_booking_label
-from services.validators import format_date_ru
 
 _WD = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 

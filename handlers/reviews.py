@@ -47,11 +47,16 @@ async def cb_rating(cb: CallbackQuery, callback_data: Rev, state: FSMContext, re
         return
     low = review.rating <= studio.review_low_rating
     await ack(cb)
-    await state.set_state(ReviewStates.comment)
-    await state.update_data(review_booking_id=booking.id, review_low=low)
     text = review_thanks_text(review.rating, studio.review_url, low)
-    text += "\n\nМожно добавить комментарий — просто напишите его сообщением."
-    await respond(cb, text, _prompt_kb(booking.id, studio.review_url, review.rating, studio.review_low_rating))
+    if await state.get_state() is None:
+        await state.set_state(ReviewStates.comment)
+        await state.update_data(review_booking_id=booking.id, review_low=low)
+        text += "\n\nМожно добавить комментарий — просто напишите его сообщением."
+        markup = _prompt_kb(booking.id, studio.review_url, review.rating, studio.review_low_rating)
+    else:
+        # клиент занят другим сценарием (например, оформляет запись): его черновик не трогаем
+        markup = ckb.review_link_kb(studio.review_url) if studio.review_url and not low else None
+    await respond(cb, text, markup)
     if low:
         await notify_admins_text(cb.bot, settings.admin_ids, low_rating_alert(booking, review.rating, "", studio.timezone))
 

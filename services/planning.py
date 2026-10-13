@@ -1,13 +1,12 @@
 """Планирование заданий: напоминания, запрос отзыва, рекомендации по уходу."""
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from content.care import CARE_RULES, CareRule
 from database.models import Booking
 from database.repository import JobSpec, iso_utc
-from services.schedule import from_iso
 
 
 def _local_to_utc(local_naive: datetime, tz_name: str) -> datetime:

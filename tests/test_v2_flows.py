@@ -392,9 +392,8 @@ async def test_low_rating_alerts_admin_with_comment(env):
 
 async def test_rating_for_unfinished_or_foreign_booking_is_refused(env):
     b, now = await accepted_booking(env, 3)
-    out = env.last(b.user_id) if env.visible(b.user_id) else None
     await env.repo.upsert_user(OTHER, "o", "O")
-    msg = await env.bot.send_message(OTHER, "x")
+    await env.bot.send_message(OTHER, "x")
     sent = env.last(OTHER)
     await env.press(b.user_id, sent, f"rev:{b.id}:5")                           # визит не завершён
     assert await env.repo.get_review(b.id) is None
@@ -472,7 +471,7 @@ async def test_care_message_only_with_consent_and_not_twice(env):
     await env.repo._conn.commit()
     await env.dp.workflow_data["admin"].change_status(ADMIN_ID, b.id, BookingStatus.DONE)
     later = now + timedelta(days=15)
-    stats = await process_jobs(env.bot, env.repo, env.settings, later, pause=0)
+    await process_jobs(env.bot, env.repo, env.settings, later, pause=0)
     care_sent = [o for o in env.visible(b.user_id) if "Защитить" in (o.text or "")]
     assert not care_sent                                                        # нет согласия → не отправляем
     jobs = {j.kind: j.status for j in await env.repo.jobs_for_booking(b.id)}
@@ -627,3 +626,33 @@ async def test_admin_service_new_methods_require_admin():
             await admin.add_block(ADMIN_ID, date(2026, 10, 5), date(2026, 10, 1))
     finally:
         await db.close()
+
+
+async def test_comment_dash_means_no_comment(env):
+    await pick_until_confirm(env, CLIENT_ID)                       # в сценарии комментарий — «-»
+    await submit(env, CLIENT_ID)
+    assert (await env.repo.get_booking(1)).comment == ""
+
+
+async def test_opening_admin_panel_resets_unfinished_wizard(env):
+    await env.send(ADMIN_ID, "/admin")
+    await env.click(ADMIN_ID, "Скидки")
+    await env.click(ADMIN_ID, "Новое правило")
+    await env.send(ADMIN_ID, "/admin")                              # админ передумал и открыл панель заново
+    await env.send(ADMIN_ID, "Случайный текст")
+    assert "Не совсем понял" in env.last_text(ADMIN_ID)             # мастер не «перехватил» сообщение
+    assert await env.repo.list_rules() == []
+
+
+async def test_rating_does_not_destroy_booking_draft_in_progress(env):
+    b, now = await done_booking(env)
+    await process_jobs(env.bot, env.repo, env.settings, now + timedelta(hours=4), pause=0)
+    request = next(o for o in env.visible(b.user_id) if "Как прошёл визит" in (o.text or ""))
+    await env.send(b.user_id, BTN_BOOK)                              # клиент начал новую запись…
+    await env.click(b.user_id, "Мойка кузова")
+    await env.press(b.user_id, request, f"rev:{b.id}:4")             # …и нажал старую кнопку оценки
+    assert (await env.repo.get_review(b.id)).rating == 4
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    ctx = FSMContext(env.dp.storage, StorageKey(env.bot.id, b.user_id, b.user_id))
+    assert await ctx.get_state() == "BookingStates:car"              # черновик записи цел

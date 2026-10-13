@@ -6,10 +6,12 @@ import logging
 from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import BaseFilter, Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, Message, TelegramObject
 
 from config import Settings
 from database.models import STATUS_LABELS, BookingStatus, parse_status
+from database.repository import Repository
 from keyboards import admin as akb
 from keyboards.callbacks import Adm, AdmX
 from services.admin import LAST_N, AdminService
@@ -63,12 +65,14 @@ async def show_panel(event, admin: AdminService, uid: int) -> None:
 
 
 @admin_router.message(Command("admin"))
-async def cmd_admin(message: Message, admin: AdminService) -> None:
+async def cmd_admin(message: Message, state: FSMContext, admin: AdminService) -> None:
+    await state.clear()                                 # недописанный мастер (скидки, даты) не должен «залипать»
     await show_panel(message, admin, message.from_user.id)
 
 
 @admin_router.callback_query(Adm.filter(F.a == "home"))
-async def cb_home(cb: CallbackQuery, admin: AdminService) -> None:
+async def cb_home(cb: CallbackQuery, state: FSMContext, admin: AdminService) -> None:
+    await state.clear()
     await ack(cb)
     await show_panel(cb, admin, cb.from_user.id)
 
@@ -125,7 +129,8 @@ async def cb_view(cb: CallbackQuery, callback_data: Adm, admin: AdminService, se
 
 
 @admin_router.callback_query(Adm.filter(F.a == "set"))
-async def cb_set_status(cb: CallbackQuery, callback_data: Adm, admin: AdminService, settings: Settings) -> None:
+async def cb_set_status(cb: CallbackQuery, callback_data: Adm, admin: AdminService, settings: Settings,
+                        repo: Repository) -> None:
     uid = cb.from_user.id
     new_status = parse_status(callback_data.s)
     if new_status is None:
@@ -145,7 +150,7 @@ async def cb_set_status(cb: CallbackQuery, callback_data: Adm, admin: AdminServi
         return
 
     if new_status == BookingStatus.DONE:
-        await after_done(cb.bot, admin._repo, result.booking, settings.studio)
+        await after_done(cb.bot, repo, result.booking, settings.studio)
     delivered = await notify_client_status(cb.bot, result.booking, settings.studio.name)
     if delivered:
         await ack(cb, f"Статус: {STATUS_LABELS[new_status]}")

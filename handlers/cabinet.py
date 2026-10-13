@@ -19,7 +19,6 @@ from keyboards.admin import booking_actions_kb
 from keyboards.callbacks import Cab, Menu, Mine
 from keyboards.main import BTN_CABINET
 from services import availability, planning
-from services.discounts import voucher_discount
 from services.formatting import esc, format_when, my_booking_card
 from services.notifications import notify_admins_text
 from services.schedule import from_iso

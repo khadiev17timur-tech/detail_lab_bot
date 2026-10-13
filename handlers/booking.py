@@ -18,7 +18,6 @@ from content.policy import POLICY_TEXT
 from database.errors import SlotTaken, VoucherUnavailable
 from database.repository import Repository
 from keyboards import booking as kb
-from keyboards.admin import booking_actions_kb
 from keyboards.callbacks import Book, Menu, Svc
 from keyboards.main import BTN_BOOK, main_menu
 from services import availability, planning
@@ -518,6 +517,8 @@ async def msg_comment(message: Message, state: FSMContext, settings: Settings, r
     except ValidationError as exc:
         await _warn(message, str(exc))
         return
+    if comment.lower() in {"-", "—", "нет", "не нужно", "пропустить"}:
+        comment = ""                                    # «нет комментария» не должен попадать в заявку
     await state.update_data(comment=comment)
     await next_step(message, state, settings, repo, "comment")
 

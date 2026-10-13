@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-
 from aiogram import F, Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -21,7 +19,7 @@ from services.formatting import esc, format_when
 from services.validators import ValidationError, format_date_ru, validate_car
 from states.client import CarStates
 from utils.flow import reset_flow
-from utils.telegram import Event, ack, respond, send
+from utils.telegram import Event, ack, respond
 
 log = logging.getLogger(__name__)
 router = Router(name="cars")

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from aiogram import F, Router
 from aiogram.filters import StateFilter
@@ -14,11 +14,11 @@ from handlers.admin import IsAdmin
 from keyboards import admin as akb
 from keyboards.callbacks import AdmX
 from services import availability
-from services.admin import AdminService, PermissionDenied
+from services.admin import AdminService
 from services.formatting import analytics_text, day_schedule_text, esc, reviews_text
 from services.validators import ValidationError, parse_date_range
 from states.admin import BlockStates, RuleStates
-from utils.telegram import ack, respond, send
+from utils.telegram import ack, respond
 
 log = logging.getLogger(__name__)
 

@@ -1,13 +1,13 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 import pytest_asyncio
 
 from database import BookingStatus, Database, NewBooking, Repository
 from database.errors import NotAllowed, SlotTaken, VoucherUnavailable
-from database.repository import iso_utc, utcnow
-from services.schedule import from_iso, to_iso
+from database.repository import utcnow
+from services.schedule import from_iso
 
 pytestmark = pytest.mark.asyncio
 

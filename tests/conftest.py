@@ -200,18 +200,24 @@ class Harness:
         return out
 
 
-@pytest_asyncio.fixture
-async def env(tmp_path):
-    db = Database(tmp_path / "test.db")
+async def build_env(db_path: Path, tmp_path: Path) -> Harness:
+    """Собирает настоящего бота (Dispatcher + FSM + SQLite) над базой по пути db_path."""
+    db = Database(db_path)
     await db.connect()
     repo = Repository(db)
     settings = Settings(
-        bot_token=TOKEN, admin_ids=frozenset({ADMIN_ID}), db_path=tmp_path / "test.db",
+        bot_token=TOKEN, admin_ids=frozenset({ADMIN_ID}), db_path=Path(db_path),
         portfolio_dir=tmp_path / "portfolio", log_level="INFO",
         studio=replace(STUDIO, manager_username=""),
     )
     tg = FakeTelegram()
     bot = Bot(token=TOKEN, session=tg, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher(settings, repo)
-    yield Harness(bot=bot, dp=dp, tg=tg, repo=repo, settings=settings)
-    await db.close()
+    return Harness(bot=bot, dp=dp, tg=tg, repo=repo, settings=settings)
+
+
+@pytest_asyncio.fixture
+async def env(tmp_path):
+    harness = await build_env(tmp_path / "test.db", tmp_path)
+    yield harness
+    await harness.repo._db.close()
