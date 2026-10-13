@@ -11,7 +11,7 @@ from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, Message
 from config import Settings
 from database.models import STATUS_LABELS, BookingStatus, parse_status
 from keyboards import admin as akb
-from keyboards.callbacks import Adm
+from keyboards.callbacks import Adm, AdmX
 from services.admin import LAST_N, AdminService
 from services.backup import BackupError
 from services.formatting import admin_booking_card, stats_text
@@ -212,6 +212,7 @@ async def deny_message(message: Message) -> None:
 
 
 @deny_router.callback_query(Adm.filter())
+@deny_router.callback_query(AdmX.filter())
 async def deny_callback(cb: CallbackQuery) -> None:
     log.warning("Попытка админ-действия без прав: user=%s data=%s", cb.from_user.id, cb.data)
     await ack(cb, NO_ACCESS, alert=True)

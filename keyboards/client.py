@@ -1,7 +1,7 @@
 """Клавиатуры личного кабинета клиента."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from aiogram.types import InlineKeyboardButton as Btn, InlineKeyboardMarkup as Markup
 
@@ -65,8 +65,16 @@ def cancel_confirm_kb(booking_id: int) -> Markup:
     ])
 
 
-def resched_dates_kb(booking_id: int, days: list[tuple[date, int]]) -> Markup:
-    buttons = [Btn(text=f"{_WD[d.weekday()]} {d:%d.%m}", callback_data=Mine(a="rdate", id=booking_id, v=d.isoformat()).pack())
+def _day_label(d: date, today: date) -> str:
+    if d == today:
+        return "Сегодня"
+    if d == today + timedelta(days=1):
+        return "Завтра"
+    return f"{_WD[d.weekday()]} {d:%d.%m}"
+
+
+def resched_dates_kb(booking_id: int, days: list[tuple[date, int]], today: date) -> Markup:
+    buttons = [Btn(text=_day_label(d, today), callback_data=Mine(a="rdate", id=booking_id, v=d.isoformat()).pack())
                for d, _ in days]
     rows = _grid(buttons, 4)
     rows.append([Btn(text="⬅️ Назад", callback_data=Mine(a="view", id=booking_id).pack())])

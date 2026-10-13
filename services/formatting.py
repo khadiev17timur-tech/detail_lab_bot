@@ -264,3 +264,58 @@ def low_rating_alert(b: Booking, rating: int, comment: str, tz_name: str) -> str
 
 def stars(n: int) -> str:
     return "⭐" * n + "☆" * (5 - n)
+
+
+# --------------------------------------------------------------------- админка v2
+def day_schedule_text(day, bookings: list[Booking], blocked: bool, posts: int) -> str:
+    lines = [f"📅 <b>Расписание · {esc(format_date_ru(day))}</b>", f"Постов: {posts}"]
+    if blocked:
+        lines.append("🚫 День закрыт для записи")
+    if not bookings:
+        lines += ["", "Записей нет."]
+        return "\n".join(lines)
+    lines.append("")
+    for b in bookings:
+        when = f"{from_iso(b.start_at):%H:%M}–{from_iso(b.end_at):%H:%M}" if b.start_at and b.end_at else format_time_ru(b.visit_time)
+        mark = {"new": "🆕", "in_work": "🛠", "accepted": "✅"}.get(b.status.value, "•")
+        lines.append(f"{mark} {when} · №{b.id} · {esc(b.service_title)} · {esc(b.car)} · {esc(b.name)}")
+    return "\n".join(lines)
+
+
+def reviews_text(reviews, count: int, avg, tz_name: str) -> str:
+    head = "⭐ <b>Отзывы</b>"
+    if not count:
+        return f"{head}\n\nПока нет оценок."
+    lines = [head, f"Всего: {count} · средняя оценка: <b>{avg:.2f}</b>", ""]
+    for r in reviews:
+        lines.append(f"{stars(r.rating)} · запись №{r.booking_id} · {local_dt(r.created_at, tz_name)}")
+        if r.comment:
+            lines.append(f"   «{esc(r.comment[:200])}»")
+    return "\n".join(lines)
+
+
+def analytics_text(a: dict, days: int) -> str:
+    created = a["created"]
+    by = a["by_status"]
+    cancelled = by.get("cancelled", 0)
+    rate = f"{cancelled * 100 // created}%" if created else "—"
+    jobs = a["jobs"]
+    lines = [
+        f"📈 <b>Аналитика за {days} дн.</b>",
+        "",
+        f"Заявок создано: <b>{created}</b>",
+        f"• завершено: {by.get('done', 0)} · в работе/приняты: {by.get('in_work', 0) + by.get('accepted', 0)} · новые: {by.get('new', 0)}",
+        f"• отклонено студией: {by.get('rejected', 0)} · отменено клиентами: {cancelled} ({rate})",
+        f"• из отмен «поздних» (после начала визита): {a['late_cancel']}",
+        "",
+        f"Клиентов с завершённым визитом: {a['done_clients']}, из них вернулись (2+ визита): <b>{a['repeat_clients']}</b>",
+        "",
+        f"Отзывов: {a['reviews']}" + (f" · средняя {a['reviews_avg']:.2f}" if a["reviews_avg"] else "") + f" · низких за период: {a['low_reviews']}",
+        "",
+        f"Скидки: выдано {a['vouchers_issued']}, использовано {a['vouchers_used']}, предоставлено на {format_rub(a['discount_total'])}",
+        f"Согласились на предложения: {a['marketing_users']} клиентов",
+        "",
+        f"Сообщения по расписанию: отправлено {jobs.get('sent', 0)}, пропущено {jobs.get('skipped', 0)}, "
+        f"не доставлено {jobs.get('failed', 0)}, ждут {jobs.get('pending', 0)}",
+    ]
+    return "\n".join(lines)

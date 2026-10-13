@@ -51,6 +51,7 @@ class FakeTelegram(BaseSession):
         self.outbox: list[Out] = []
         self.calls: list = []
         self.forbidden_chats: set[int] = set()
+        self.fail_next: dict[int, list] = {}      # chat_id -> очередь исключений для следующих отправок
         self._ids = 5000
         self._tick = 0
 
@@ -78,6 +79,9 @@ class FakeTelegram(BaseSession):
         self.calls.append(method)
         self._tick += 1
         if isinstance(method, (SendMessage, SendPhoto, SendDocument)):
+            queue = self.fail_next.get(method.chat_id)
+            if queue:
+                raise queue.pop(0)
             if method.chat_id in self.forbidden_chats:
                 raise TelegramForbiddenError(method, "Forbidden: bot was blocked by the user")
             self._ids += 1

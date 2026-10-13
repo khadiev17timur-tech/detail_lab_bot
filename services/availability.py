@@ -40,3 +40,8 @@ async def slots_for_day(repo: Repository, studio, service: Service, day: date, n
 
 def interval_of(service: Service, start: datetime, studio) -> tuple[datetime, datetime]:
     return start, schedule.service_end(service, start, studio)
+
+
+def local_now_date_default() -> date:
+    """Сегодняшняя дата без привязки к настройкам студии (для выборок «с сегодняшнего дня»)."""
+    return date.today()

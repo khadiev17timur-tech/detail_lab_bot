@@ -162,3 +162,16 @@ def format_date_ru(d: date | str) -> str:
 
 def format_time_ru(value: str) -> str:
     return "в любое время" if value == ANY_TIME else value
+
+
+def parse_date_range(raw: str, *, today: date) -> tuple[date, date]:
+    """«25.10» или «25.10-28.10» (также «25.10.2026 - 28.10.2026»). Не раньше сегодняшнего дня, не дальше года."""
+    text = _collapse(raw).lower().replace("—", "-").replace("–", "-")
+    parts = [p.strip() for p in re.split(r"\s*-\s*(?=\d{1,2}[./])", text) if p.strip()]
+    if not 1 <= len(parts) <= 2:
+        raise ValidationError("Напишите дату или период, например: 25.10 или 25.10-28.10.")
+    first = parse_visit_date(parts[0], today=today, horizon_days=365)
+    last = parse_visit_date(parts[1], today=today, horizon_days=365) if len(parts) == 2 else first
+    if last < first:
+        raise ValidationError("Конец периода раньше начала.")
+    return first, last

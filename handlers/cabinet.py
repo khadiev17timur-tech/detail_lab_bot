@@ -168,7 +168,7 @@ async def cb_resched(cb: CallbackQuery, callback_data: Mine, repo: Repository, s
                       ckb.my_bookings_kb([]))
         return
     await respond(cb, f"🔁 <b>Перенос записи №{b.id}</b>\nСейчас: {esc(format_when(b))}\n\nВыберите новую дату:",
-                  ckb.resched_dates_kb(b.id, days))
+                  ckb.resched_dates_kb(b.id, days, now.date()))
 
 
 @router.callback_query(Mine.filter(F.a == "rdate"), StateFilter("*"))

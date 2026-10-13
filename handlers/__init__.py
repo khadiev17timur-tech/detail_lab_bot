@@ -1,6 +1,6 @@
 from aiogram import Router
 
-from handlers import (admin, booking, cabinet, calculator, cars, common, contacts, faq, fallback,
+from handlers import (admin, admin_ext, booking, cabinet, calculator, cars, common, contacts, faq, fallback,
                       portfolio, prices, reviews, services)
 
 
@@ -9,6 +9,7 @@ def build_root_router() -> Router:
     ordered = (
         common.router,
         admin.admin_router,
+        admin_ext.router,
         admin.deny_router,
         services.router,
         prices.router,

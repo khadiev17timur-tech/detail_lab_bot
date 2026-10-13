@@ -123,5 +123,5 @@ async def test_backup_command_for_admin_sends_file_and_denies_others(env):
 
 async def test_backup_button_in_admin_panel(env):
     await env.send(ADMIN_ID, "/admin")
-    await env.click(ADMIN_ID, "Бэкап базы")
+    await env.click(ADMIN_ID, "Бэкап")
     assert [o for o in env.tg.outbox if o.kind == "SendDocument"]
