@@ -113,6 +113,26 @@ def _build_studio(env: Mapping[str, str]) -> Studio:
         if url:
             changes[field] = url
 
+    review_url = _clean_url("REVIEW_URL", env.get("REVIEW_URL"))
+    if review_url:
+        changes["review_url"] = review_url
+
+    posts = (env.get("STUDIO_POSTS") or "").strip()
+    if posts:
+        if not posts.isdigit() or not 1 <= int(posts) <= 50:
+            raise ConfigError("STUDIO_POSTS: целое число постов от 1 до 50.")
+        changes["posts"] = int(posts)
+
+    hours = (env.get("REMINDER_HOURS") or "").strip()
+    if hours:
+        try:
+            parsed = tuple(sorted({int(x) for x in re.split(r"[,\s;]+", hours) if x}, reverse=True))
+        except ValueError:
+            raise ConfigError("REMINDER_HOURS: числа часов через запятую, например 24,2.") from None
+        if not parsed or any(not 1 <= h <= 24 * 14 for h in parsed):
+            raise ConfigError("REMINDER_HOURS: каждое значение от 1 до 336 часов.")
+        changes["reminder_hours"] = parsed
+
     tz = (env.get("TIMEZONE") or "").strip()
     if tz:
         try:
