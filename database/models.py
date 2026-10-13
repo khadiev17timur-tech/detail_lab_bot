@@ -223,3 +223,12 @@ class ScheduleBlock:
     date_from: str
     date_to: str
     reason: str
+
+
+@dataclass(frozen=True)
+class UserRow:
+    tg_id: int
+    username: str | None
+    full_name: str | None
+    marketing_consent: bool
+    marketing_asked: bool
