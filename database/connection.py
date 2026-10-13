@@ -8,9 +8,11 @@ import aiosqlite
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
-SCHEMA = """
+# Схема версии 1 (исходная). Новые базы создаются по ней и затем мигрируются до актуальной версии —
+# так существует ровно один путь создания схемы, и он покрыт тестами миграции.
+SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS users (
     tg_id       INTEGER PRIMARY KEY,
     username    TEXT,
@@ -66,6 +68,10 @@ class Database:
         self._conn: aiosqlite.Connection | None = None
 
     @property
+    def backup_dir(self) -> Path:
+        return Path(self.path).parent / "backups"
+
+    @property
     def conn(self) -> aiosqlite.Connection:
         if self._conn is None:
             raise RuntimeError("База данных не подключена: вызовите Database.connect()")
@@ -76,16 +82,27 @@ class Database:
             return
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        existed = self.path != ":memory:" and Path(self.path).exists() and Path(self.path).stat().st_size > 0
         conn = await aiosqlite.connect(self.path)
         try:
             conn.row_factory = aiosqlite.Row
-            await conn.execute("PRAGMA foreign_keys = ON")
             await conn.execute("PRAGMA busy_timeout = 5000")
             if self.path != ":memory:":
                 await self._enable_wal(conn)
-            await conn.executescript(SCHEMA)
-            await conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            await conn.commit()
+            await conn.execute("PRAGMA foreign_keys = ON")
+            async with conn.execute("PRAGMA user_version") as cur:
+                version = (await cur.fetchone())[0]
+            if version == 0:
+                await conn.executescript(SCHEMA_V1)
+                await conn.execute("PRAGMA user_version = 1")
+                await conn.commit()
+                version = 1
+            if version > SCHEMA_VERSION:
+                raise RuntimeError(f"База создана более новой версией бота (схема {version} > {SCHEMA_VERSION}). "
+                                   "Обновите код, а не откатывайте его: данные могут быть несовместимы.")
+            if version < SCHEMA_VERSION:
+                from database.migrations import run_migrations
+                await run_migrations(conn, self.path, version, backup_dir=self.backup_dir if existed else None)
         except Exception:
             await conn.close()
             raise

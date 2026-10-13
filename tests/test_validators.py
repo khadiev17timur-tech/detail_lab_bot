@@ -122,7 +122,8 @@ def test_format_date_ru():
 # ------------------------------------------------- обязательные поля заявки
 def good_draft(**over):
     d = {"draft_id": "abc", "service_id": "polish", "car": "BMW X5", "car_class": "suv",
-         "visit_date": "2026-10-20", "visit_time": "12:00", "name": "Иван", "phone": "+79991234567",
+         "visit_date": "2026-10-20", "visit_time": "12:00", "start_at": "2026-10-20T12:00",
+         "end_at": "2026-10-21T20:00", "name": "Иван", "phone": "+79991234567",
          "comment": "", "consent": True, "addon_ids": []}
     d.update(over)
     return d
@@ -132,10 +133,11 @@ def test_complete_draft_has_no_problems_and_builds():
     assert find_problems(good_draft()) == []
     nb = build_new_booking(good_draft(), user_id=7)
     assert nb.user_id == 7 and nb.service_title.startswith("Полировка") and nb.estimate_rub == 27000
+    assert (nb.start_at, nb.end_at) == ("2026-10-20T12:00", "2026-10-21T20:00") and nb.voucher_id is None
     assert nb.phone == "+79991234567" and nb.car_class_title == "Внедорожник"
 
 
-@pytest.mark.parametrize("field", ["service_id", "car", "car_class", "visit_date", "visit_time", "name", "phone"])
+@pytest.mark.parametrize("field", ["service_id", "car", "car_class", "visit_date", "visit_time", "start_at", "end_at", "name", "phone"])
 def test_each_required_field_is_enforced(field):
     draft = good_draft()
     del draft[field]
@@ -146,8 +148,9 @@ def test_each_required_field_is_enforced(field):
 
 
 def test_invalid_values_are_flagged_and_first_step_found():
-    problems = find_problems(good_draft(service_id="zzz", phone="123", visit_date="31.31.2026", visit_time="25:61"))
-    assert set(problems) == {"service_id", "phone", "visit_date", "visit_time"}
+    problems = find_problems(good_draft(service_id="zzz", phone="123", visit_date="31.31.2026", visit_time="25:61",
+                                        start_at="вчера"))
+    assert set(problems) == {"service_id", "phone", "visit_date", "visit_time", "start_at"}
     assert first_problem_step(problems) == "service"
     assert first_problem_step(["phone", "name"]) == "name"
     assert first_problem_step([]) is None

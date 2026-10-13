@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from content.catalog import CAR_CLASSES_BY_ID, SERVICES_BY_ID
+from database.repository import Repository
 from handlers.booking import start_booking
 from keyboards.callbacks import Calc, Menu, Svc
 from keyboards.calculator import calc_addons_kb, calc_classes_kb, calc_result_kb, calc_services_kb
@@ -166,14 +167,14 @@ async def cb_restart(cb: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.callback_query(CalcStates.result, Calc.filter(F.action == "book"))
-async def cb_book_from_calc(cb: CallbackQuery, state: FSMContext, settings: Settings) -> None:
+async def cb_book_from_calc(cb: CallbackQuery, state: FSMContext, settings: Settings, repo: Repository) -> None:
     data = await state.get_data()
     try:
         est = calculate_estimate(data["service_id"], data["car_class"], data.get("addons") or [])
     except (KeyError, PricingError):
         await ack(cb, STALE, alert=True)
         return
-    await start_booking(cb, state, settings, service_id=est.service_id,
+    await start_booking(cb, state, settings, repo, service_id=est.service_id,
                         car_class_id=est.car_class_id, addon_ids=[a for a in data.get("addons") or []])
 
 

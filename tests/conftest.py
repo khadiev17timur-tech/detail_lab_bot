@@ -51,6 +51,7 @@ class FakeTelegram(BaseSession):
         self.outbox: list[Out] = []
         self.calls: list = []
         self.forbidden_chats: set[int] = set()
+        self.fail_next: dict[int, list] = {}      # chat_id -> очередь исключений для следующих отправок
         self._ids = 5000
         self._tick = 0
 
@@ -78,6 +79,9 @@ class FakeTelegram(BaseSession):
         self.calls.append(method)
         self._tick += 1
         if isinstance(method, (SendMessage, SendPhoto, SendDocument)):
+            queue = self.fail_next.get(method.chat_id)
+            if queue:
+                raise queue.pop(0)
             if method.chat_id in self.forbidden_chats:
                 raise TelegramForbiddenError(method, "Forbidden: bot was blocked by the user")
             self._ids += 1
@@ -196,18 +200,24 @@ class Harness:
         return out
 
 
-@pytest_asyncio.fixture
-async def env(tmp_path):
-    db = Database(tmp_path / "test.db")
+async def build_env(db_path: Path, tmp_path: Path) -> Harness:
+    """Собирает настоящего бота (Dispatcher + FSM + SQLite) над базой по пути db_path."""
+    db = Database(db_path)
     await db.connect()
     repo = Repository(db)
     settings = Settings(
-        bot_token=TOKEN, admin_ids=frozenset({ADMIN_ID}), db_path=tmp_path / "test.db",
+        bot_token=TOKEN, admin_ids=frozenset({ADMIN_ID}), db_path=Path(db_path),
         portfolio_dir=tmp_path / "portfolio", log_level="INFO",
         studio=replace(STUDIO, manager_username=""),
     )
     tg = FakeTelegram()
     bot = Bot(token=TOKEN, session=tg, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = build_dispatcher(settings, repo)
-    yield Harness(bot=bot, dp=dp, tg=tg, repo=repo, settings=settings)
-    await db.close()
+    return Harness(bot=bot, dp=dp, tg=tg, repo=repo, settings=settings)
+
+
+@pytest_asyncio.fixture
+async def env(tmp_path):
+    harness = await build_env(tmp_path / "test.db", tmp_path)
+    yield harness
+    await harness.repo._db.close()

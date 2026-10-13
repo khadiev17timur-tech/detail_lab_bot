@@ -46,3 +46,15 @@ async def notify_client_status(bot: Bot, booking: Booking, studio_name: str) -> 
     except TelegramAPIError as exc:
         log.warning("Не удалось уведомить клиента %s по заявке №%s: %s", booking.user_id, booking.id, exc)
         return False
+
+
+async def notify_admins_text(bot: Bot, admin_ids: Iterable[int], text: str, reply_markup=None) -> int:
+    """Рассылает произвольное сообщение администраторам. Ошибки доставки не прерывают рассылку."""
+    delivered = 0
+    for admin_id in admin_ids:
+        try:
+            await bot.send_message(admin_id, text, reply_markup=reply_markup)
+            delivered += 1
+        except TelegramAPIError as exc:
+            log.warning("Не удалось отправить сообщение администратору %s: %s", admin_id, exc)
+    return delivered

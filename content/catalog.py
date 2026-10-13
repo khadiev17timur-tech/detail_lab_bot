@@ -45,8 +45,10 @@ class Service:
     description: str
     benefits: tuple[str, ...]
     price_from: int
-    duration: str
+    duration: str                 # текст для клиента
     addon_ids: tuple[str, ...] = ()
+    duration_min: int = 60        # сколько минут занимает пост (для услуг на один день)
+    days: int = 1                 # >1: услуга занимает пост на несколько рабочих дней (сдача в 10:00)
 
 
 CAR_CLASSES: tuple[CarClass, ...] = (
@@ -97,6 +99,7 @@ SERVICES: tuple[Service, ...] = (
                   "Кузов без разводов и следов воды"),
         price_from=1500, duration="40–60 минут",
         addon_ids=("wheel_care", "glass_coat", "trunk_clean"),
+        duration_min=60, days=1,
     ),
     Service(
         id="detail_wash", emoji="💧", title="Детейлинг-мойка", short_title="Детейлинг-мойка",
@@ -110,6 +113,7 @@ SERVICES: tuple[Service, ...] = (
                   "Заметный эффект свежего автомобиля"),
         price_from=3500, duration="2–3 часа",
         addon_ids=("engine_bay", "wheel_care", "decon", "glass_coat", "trim_restore"),
+        duration_min=180, days=1,
     ),
     Service(
         id="interior", emoji="🪑", title="Глубокая химчистка салона", short_title="Химчистка салона",
@@ -123,6 +127,7 @@ SERVICES: tuple[Service, ...] = (
                   "Бережные материалы для тканей и пластика"),
         price_from=9000, duration="6–8 часов",
         addon_ids=("ozone", "ac_clean", "headliner", "trunk_clean", "leather_coat"),
+        duration_min=480, days=1,
     ),
     Service(
         id="polish", emoji="✨", title="Полировка кузова", short_title="Полировка кузова",
@@ -136,6 +141,7 @@ SERVICES: tuple[Service, ...] = (
                   "Подготовка к нанесению защиты"),
         price_from=18000, duration="1–2 дня",
         addon_ids=("decon", "trim_restore", "headlight_polish", "glass_polish"),
+        duration_min=600, days=2,
     ),
     Service(
         id="abrasive", emoji="🔧", title="Абразивная полировка и устранение мелких дефектов ЛКП",
@@ -149,6 +155,7 @@ SERVICES: tuple[Service, ...] = (
                   "Подходит перед нанесением защиты"),
         price_from=28000, duration="2–3 дня",
         addon_ids=("decon", "trim_restore", "glass_polish"),
+        duration_min=600, days=3,
     ),
     Service(
         id="ceramic", emoji="🛡", title="Керамическое покрытие", short_title="Керамика",
@@ -162,6 +169,7 @@ SERVICES: tuple[Service, ...] = (
                   "Проще уход за автомобилем"),
         price_from=35000, duration="2–3 дня",
         addon_ids=("decon", "wheel_ceramic", "glass_ceramic", "trim_restore"),
+        duration_min=600, days=3,
     ),
     Service(
         id="ppf", emoji="🧱", title="Оклейка кузова защитной плёнкой", short_title="Защитная плёнка",
@@ -175,6 +183,7 @@ SERVICES: tuple[Service, ...] = (
                   "Объём оклейки подбирается индивидуально"),
         price_from=60000, duration="3–5 дней",
         addon_ids=("ppf_headlights", "ppf_sills", "decon"),
+        duration_min=600, days=4,
     ),
     Service(
         id="headlights", emoji="💡", title="Полировка и защита фар", short_title="Фары",
@@ -188,6 +197,7 @@ SERVICES: tuple[Service, ...] = (
                   "Свежий вид передней части авто"),
         price_from=4000, duration="1,5–2 часа",
         addon_ids=("ppf_headlights",),
+        duration_min=120, days=1,
     ),
     Service(
         id="leather", emoji="🧴", title="Уход за кожаным салоном", short_title="Кожаный салон",
@@ -201,6 +211,7 @@ SERVICES: tuple[Service, ...] = (
                   "Опрятный вид сидений и панелей"),
         price_from=6000, duration="2–4 часа",
         addon_ids=("leather_coat", "leather_restore"),
+        duration_min=240, days=1,
     ),
     Service(
         id="complex", emoji="👑", title="Комплексный детейлинг", short_title="Комплекс",
@@ -214,6 +225,7 @@ SERVICES: tuple[Service, ...] = (
                   "Выгоднее, чем заказывать услуги по отдельности"),
         price_from=65000, duration="3–5 дней",
         addon_ids=("engine_bay", "glass_coat", "ozone", "ac_clean", "wheel_ceramic"),
+        duration_min=600, days=4,
     ),
 )
 

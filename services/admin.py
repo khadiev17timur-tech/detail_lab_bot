@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
-from database.models import Booking, BookingStatus, Stats, StatusResult
+from database.models import (Booking, BookingStatus, DiscountRule, Review, ScheduleBlock, Stats, StatusResult)
 from database.repository import Repository
 from services.backup import make_backup
+from services.lifecycle import done_jobs
 from services.export import bookings_to_csv
 
 PAGE_SIZE = 8
@@ -28,9 +30,10 @@ class Page:
 
 
 class AdminService:
-    def __init__(self, repo: Repository, admin_ids: Iterable[int]):
+    def __init__(self, repo: Repository, admin_ids: Iterable[int], studio=None):
         self._repo = repo
         self._admin_ids = frozenset(admin_ids)
+        self._studio = studio
 
     @property
     def admin_ids(self) -> frozenset[int]:
@@ -76,7 +79,12 @@ class AdminService:
     async def change_status(self, actor_id: int | None, booking_id: int, new_status: BookingStatus,
                             expected: BookingStatus | None = None) -> StatusResult:
         actor = self._require(actor_id)
-        return await self._repo.set_status(booking_id, new_status, actor_id=actor, expected=expected)
+        jobs = []
+        if new_status == BookingStatus.DONE and self._studio is not None:
+            booking = await self._repo.get_booking(booking_id)
+            if booking is not None:
+                jobs = done_jobs(booking, datetime.now(timezone.utc), self._studio)
+        return await self._repo.set_status(booking_id, new_status, actor_id=actor, expected=expected, jobs=jobs)
 
     async def stats(self, actor_id: int | None) -> Stats:
         self._require(actor_id)
@@ -89,3 +97,68 @@ class AdminService:
     async def backup(self, actor_id: int | None, backup_dir: Path, keep: int = 7) -> Path:
         self._require(actor_id)
         return await make_backup(self._repo, backup_dir, keep=keep)
+
+
+    # ------------------------------------------------- расписание и закрытые даты
+    async def day_bookings(self, actor_id: int | None, day: date) -> list[Booking]:
+        self._require(actor_id)
+        return await self._repo.bookings_on_day(day)
+
+    async def list_blocks(self, actor_id: int | None, from_date: date | None = None) -> list[ScheduleBlock]:
+        self._require(actor_id)
+        return await self._repo.list_blocks(from_date)
+
+    async def add_block(self, actor_id: int | None, date_from: date, date_to: date, reason: str = "") -> tuple[ScheduleBlock, int]:
+        """Закрывает даты. Возвращает блок и число уже существующих активных записей в этом периоде."""
+        self._require(actor_id)
+        if date_to < date_from:
+            raise ValueError("конец периода раньше начала")
+        if (date_to - date_from).days > 366:
+            raise ValueError("период не может быть больше года")
+        conflicts = 0
+        day = date_from
+        while day <= date_to:
+            conflicts += len(await self._repo.bookings_on_day(day))
+            day += timedelta(days=1)
+        return await self._repo.add_block(date_from, date_to, reason[:200]), conflicts
+
+    async def remove_block(self, actor_id: int | None, block_id: int) -> bool:
+        self._require(actor_id)
+        return await self._repo.remove_block(block_id)
+
+    # ------------------------------------------------------------ отзывы, аналитика
+    async def recent_reviews(self, actor_id: int | None, limit: int = 10) -> tuple[list[Review], int, float | None]:
+        self._require(actor_id)
+        count, avg = await self._repo.review_summary()
+        return await self._repo.recent_reviews(limit), count, avg
+
+    async def analytics(self, actor_id: int | None, days: int = 30) -> dict:
+        self._require(actor_id)
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+        return await self._repo.analytics(since)
+
+    # ----------------------------------------------------------------- скидки
+    async def list_rules(self, actor_id: int | None) -> list[DiscountRule]:
+        self._require(actor_id)
+        return await self._repo.list_rules()
+
+    async def create_rule(self, actor_id: int | None, *, title: str, kind: str, value: int, trigger: str,
+                          threshold: int, valid_days: int, per_client_limit: int = 1, min_price: int = 0) -> DiscountRule:
+        self._require(actor_id)
+        title = title.strip()
+        if not 2 <= len(title) <= 60:
+            raise ValueError("название: от 2 до 60 символов")
+        if kind not in ("percent", "amount") or trigger not in ("visits", "winback"):
+            raise ValueError("неизвестный тип скидки или условия")
+        if kind == "percent" and not 1 <= value <= 50:
+            raise ValueError("процент скидки: от 1 до 50")
+        if kind == "amount" and not 50 <= value <= 100000:
+            raise ValueError("сумма скидки: от 50 до 100 000 ₽")
+        if not 1 <= threshold <= 3650 or not 1 <= valid_days <= 365 or not 1 <= per_client_limit <= 10 or min_price < 0:
+            raise ValueError("недопустимые границы условий")
+        return await self._repo.create_rule(title=title, kind=kind, value=value, trigger=trigger, threshold=threshold,
+                                            valid_days=valid_days, per_client_limit=per_client_limit, min_price=min_price)
+
+    async def set_rule_active(self, actor_id: int | None, rule_id: int, active: bool) -> bool:
+        self._require(actor_id)
+        return await self._repo.set_rule_active(rule_id, active)

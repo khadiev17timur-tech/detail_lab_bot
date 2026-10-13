@@ -14,7 +14,7 @@ from tests.conftest import ADMIN_ID, CLIENT_ID
 pytestmark = pytest.mark.asyncio
 
 
-async def fill_booking(h, uid=CLIENT_ID, *, service_button="Полировка кузова", phone="+7 999 123-45-67"):
+async def fill_booking(h, uid=CLIENT_ID, *, service_button="Мойка кузова", phone="+7 999 123-45-67"):
     """Проходит всю запись до экрана подтверждения."""
     await h.send(uid, BTN_BOOK)
     await h.click(uid, service_button)
@@ -126,15 +126,16 @@ async def test_booking_happy_path_saves_and_notifies_admin(env):
     booking = await env.repo.get_booking(1)
     assert booking.status == BookingStatus.NEW and booking.consent and booking.consent_at
     assert booking.phone == "+79991234567" and booking.car == "BMW X5"
-    assert booking.estimate_rub == 27000  # 18000 × 1,50
+    assert booking.estimate_rub == 2300  # 1500 × 1,50, округление до сотен
+    assert booking.start_at and booking.end_at and booking.car_id
 
     client_text = env.all_text(CLIENT_ID)
     assert "Заявка №1 отправлена" in client_text
-    assert "не подтверждённая запись" in client_text
+    assert "Менеджер подтвердит запись" in client_text and "зарезервировано" in client_text
 
     admin_msg = env.last(ADMIN_ID)
     assert "Новая заявка №1" in admin_msg.text
-    for needle in ("Иван", "+7 999 123-45-67", "BMW X5", "Полировка кузова", "Позвоните после 18:00",
+    for needle in ("Иван", "+7 999 123-45-67", "BMW X5", "Мойка кузова", "Позвоните после 18:00",
                    str(CLIENT_ID), "@ivan"):
         assert needle in admin_msg.text
     labels = [b.text for b in env.buttons(admin_msg)]
@@ -170,7 +171,7 @@ async def test_back_button_walks_steps(env):
     await env.click(CLIENT_ID, "Мойка кузова")
     await env.send(CLIENT_ID, "Audi A6")
     await env.click(CLIENT_ID, "Средний")
-    assert "желаемую дату" in env.last_text(CLIENT_ID)
+    assert "Выберите <b>дату</b>" in env.last_text(CLIENT_ID)
     await env.click(CLIENT_ID, "Назад")
     assert "класс автомобиля" in env.last_text(CLIENT_ID)
     await env.click(CLIENT_ID, "Назад")
@@ -185,7 +186,7 @@ async def test_text_back_on_phone_step_and_cancel(env):
     await env.send(CLIENT_ID, "Kia Rio")
     await env.click(CLIENT_ID, "Компактный")
     await env.click(CLIENT_ID, "Завтра")
-    await env.click(CLIENT_ID, "Любое время")
+    await env.click(CLIENT_ID, "12:00")
     await env.send(CLIENT_ID, "Мария")
     assert "номер телефона" in env.last_text(CLIENT_ID)
     await env.send(CLIENT_ID, "⬅️ Назад")
@@ -212,7 +213,9 @@ async def test_invalid_input_keeps_step_and_explains(env):
     await env.send(CLIENT_ID, "завтра")
     await env.send(CLIENT_ID, "03:00")
     assert "работает" in env.last_text(CLIENT_ID)
-    await env.send(CLIENT_ID, "15:30")
+    await env.send(CLIENT_ID, "15:30")                       # формат верный, но такого слота нет
+    assert "недоступно" in env.last_text(CLIENT_ID)
+    await env.send(CLIENT_ID, "15:00")
     await env.send(CLIENT_ID, "123")
     assert "только буквы" in env.last_text(CLIENT_ID)
     await env.send(CLIENT_ID, "Олег")
@@ -238,7 +241,7 @@ async def test_contact_button_and_foreign_contact(env):
     await env.send(CLIENT_ID, "Kia Rio")
     await env.click(CLIENT_ID, "Компактный")
     await env.click(CLIENT_ID, "Завтра")
-    await env.click(CLIENT_ID, "Любое время")
+    await env.click(CLIENT_ID, "12:00")
     await env.click(CLIENT_ID, "Использовать «")
     assert "номер телефона" in env.last_text(CLIENT_ID)
     await env.send_contact(CLIENT_ID, "79990001122", contact_user_id=555)
@@ -427,9 +430,9 @@ async def test_new_request_button_keeps_status_notification(env):
 async def test_today_is_hidden_when_no_slots_left(env, monkeypatch):
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    import handlers.booking as booking_handlers
+    import services.availability as availability_mod
     late = datetime(2026, 10, 12, 21, 30, tzinfo=ZoneInfo("Europe/Moscow"))
-    monkeypatch.setattr(booking_handlers, "now_local", lambda tz: late)
+    monkeypatch.setattr(availability_mod, "local_now", lambda studio, now=None: late.replace(tzinfo=None))
     await env.send(CLIENT_ID, BTN_BOOK)
     await env.click(CLIENT_ID, "Мойка кузова")
     await env.send(CLIENT_ID, "Kia Rio")
