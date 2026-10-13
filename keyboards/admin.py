@@ -25,7 +25,7 @@ def booking_view_kb(booking: Booking, back_filter: str = "all", back_page: int =
     """Карточка заявки: смена статуса на любой другой."""
     status_buttons = [
         InlineKeyboardButton(text=STATUS_LABELS[s], callback_data=Adm(a="set", id=booking.id, s=s.value).pack())
-        for s in BookingStatus if s != booking.status
+        for s in BookingStatus if s != booking.status and s != BookingStatus.CANCELLED
     ]
     rows = [status_buttons[i:i + 2] for i in range(0, len(status_buttons), 2)]
     rows.append([

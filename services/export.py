@@ -12,6 +12,7 @@ CSV_COLUMNS = (
     "Номер", "Статус", "Создана (UTC)", "Обновлена (UTC)", "Услуга", "Автомобиль",
     "Класс авто", "Желаемая дата", "Желаемое время", "Имя", "Телефон",
     "Telegram ID", "Username", "Комментарий", "Предв. стоимость, ₽", "Доп. работы",
+    "Начало", "Окончание", "Скидка, ₽", "Кем отменена",
 )
 # Username не включаем: у Telegram-ников нет спецсимволов, а «@» мы добавляем сами.
 _TEXT_COLUMNS_DANGEROUS = {"Автомобиль", "Имя", "Комментарий", "Услуга", "Доп. работы"}
@@ -45,6 +46,10 @@ def bookings_to_csv(bookings: Iterable[Booking]) -> bytes:
             "Комментарий": b.comment,
             "Предв. стоимость, ₽": b.estimate_rub if b.estimate_rub is not None else "",
             "Доп. работы": ", ".join(b.addons),
+            "Начало": b.start_at or "",
+            "Окончание": b.end_at or "",
+            "Скидка, ₽": b.discount_rub or "",
+            "Кем отменена": b.cancelled_by or "",
         }
         writer.writerow([_safe(str(v)) if k in _TEXT_COLUMNS_DANGEROUS else v for k, v in row.items()])
     return buf.getvalue().encode("utf-8-sig")

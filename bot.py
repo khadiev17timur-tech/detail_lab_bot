@@ -19,6 +19,7 @@ from handlers import build_root_router
 from middlewares.users import UserMiddleware
 from services.admin import AdminService, PermissionDenied
 from services.backup import BackupError, make_backup, seconds_until
+from services.scheduler import scheduler_loop
 from utils.logging_setup import setup_logging
 
 log = logging.getLogger("detail_lab")
@@ -63,7 +64,7 @@ async def on_error(event: ErrorEvent) -> bool:
 
 def build_dispatcher(settings: Settings, repo: Repository) -> Dispatcher:
     dp = Dispatcher(storage=MemoryStorage())
-    dp.workflow_data.update(settings=settings, repo=repo, admin=AdminService(repo, settings.admin_ids))
+    dp.workflow_data.update(settings=settings, repo=repo, admin=AdminService(repo, settings.admin_ids, settings.studio))
     user_mw = UserMiddleware(repo)
     dp.message.outer_middleware(user_mw)
     dp.callback_query.outer_middleware(user_mw)
@@ -169,6 +170,7 @@ async def main(check_only: bool = False) -> int:
         await bot.delete_webhook(drop_pending_updates=False)
         log.info("Бот @%s запущен. Админов: %d. База: %s", me.username, len(settings.admin_ids), settings.db_path)
         await setup_commands(bot, settings)
+        jobs_task = asyncio.create_task(scheduler_loop(bot, repo, settings), name="jobs")
         backup_task = None
         if settings.backup_enabled:
             backup_task = asyncio.create_task(backup_scheduler(bot, repo, settings), name="backup")
@@ -177,8 +179,9 @@ async def main(check_only: bool = False) -> int:
         try:
             await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
         finally:
-            if backup_task:
-                backup_task.cancel()
+            for task in (backup_task, jobs_task):
+                if task:
+                    task.cancel()
         log.info("Остановка по сигналу: polling завершён")
         return EXIT_OK
     finally:

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from content.catalog import (CAR_CLASSES, CATEGORIES, SERVICES, SERVICES_BY_ID, Service)
 from database.models import STATUS_LABELS, Booking, BookingStatus
 from services.pricing import format_coef, format_rub
+from services.schedule import from_iso
 from services.validators import format_date_ru, format_phone, format_time_ru
 
 PRICE_DISCLAIMER = (
@@ -84,12 +85,30 @@ def price_list_text(demo_notice: str = "") -> str:
 
 
 # ------------------------------------------------------------------- заявки
+def format_when(b: Booking) -> str:
+    """Когда визит: «вт, 20.10.2026 · 12:00–13:00» или многодневный интервал."""
+    if b.start_at and b.end_at:
+        start, end = from_iso(b.start_at), from_iso(b.end_at)
+        if start.date() == end.date():
+            return f"{format_date_ru(start.date())} · {start:%H:%M}–{end:%H:%M}"
+        return f"{format_date_ru(start.date())} {start:%H:%M} → {format_date_ru(end.date())} {end:%H:%M}"
+    return f"{format_date_ru(b.visit_date)} · {format_time_ru(b.visit_time)}"
+
+
+def _price_line(b: Booking) -> str | None:
+    if b.estimate_rub is None:
+        return None
+    if b.discount_rub:
+        return (f"💰 Предварительно: от {format_rub(max(0, b.estimate_rub - b.discount_rub))} "
+                f"<i>(с учётом скидки {format_rub(b.discount_rub)}; оценка, не окончательная цена)</i>")
+    return f"💰 Предварительно: от {format_rub(b.estimate_rub)} <i>(оценка, не окончательная цена)</i>"
+
+
 def _booking_lines(b: Booking) -> list[str]:
     lines = [
         f"🚘 Услуга: <b>{esc(b.service_title)}</b>",
         f"🚗 Автомобиль: {esc(b.car)} ({esc(b.car_class_title.lower())})",
-        f"📅 Желаемая дата: {esc(format_date_ru(b.visit_date))}",
-        f"🕘 Желаемое время: {esc(format_time_ru(b.visit_time))}",
+        f"📅 Время: {esc(format_when(b))}",
         f"👤 Имя: {esc(b.name)}",
         f"📞 Телефон: {esc(format_phone(b.phone))}",
     ]
@@ -97,19 +116,21 @@ def _booking_lines(b: Booking) -> list[str]:
         lines.append("➕ Доп. работы: " + esc(", ".join(b.addons)))
     if b.comment:
         lines.append(f"💬 Комментарий: {esc(b.comment)}")
-    if b.estimate_rub is not None:
-        lines.append(f"💰 Предварительно: от {format_rub(b.estimate_rub)} <i>(оценка, не окончательная цена)</i>")
+    price = _price_line(b)
+    if price:
+        lines.append(price)
     return lines
 
 
 def client_booking_card(b: Booking) -> str:
+    reserved = ("Время предварительно зарезервировано за вами. " if b.start_at else "")
     return "\n".join([
         f"✅ <b>Заявка №{b.id} отправлена</b>",
         "",
         *_booking_lines(b),
         "",
-        "ℹ️ Это заявка, а не подтверждённая запись. Менеджер свяжется с вами, чтобы "
-        "согласовать дату, время и окончательную стоимость.",
+        f"ℹ️ {reserved}Менеджер подтвердит запись и согласует окончательную стоимость. "
+        "Изменить или отменить запись можно в разделе «Мой кабинет → Мои записи».",
     ])
 
 
@@ -150,9 +171,10 @@ def client_status_text(b: Booking, studio_name: str) -> str | None:
     """Текст клиенту при смене статуса. None — клиента не уведомляем."""
     n = b.id
     if b.status == BookingStatus.IN_WORK:
-        return (f"🛠 <b>Заявка №{n} принята в работу</b>\n\n"
-                "Менеджер скоро свяжется с вами, чтобы согласовать дату, время и "
-                "окончательную стоимость. Запись считается подтверждённой только после этого согласования.")
+        held = f"Время {esc(format_when(b))} закреплено за вами. " if b.start_at else ""
+        return (f"🛠 <b>Заявка №{n} принята в работу</b>\n\n{held}"
+                "Менеджер свяжется с вами, чтобы уточнить детали и окончательную стоимость. "
+                "Запись считается подтверждённой только после этого согласования.")
     if b.status == BookingStatus.ACCEPTED:
         return (f"✅ <b>Заявка №{n} принята</b>\n\n"
                 "Менеджер уточнит с вами детали. Запись будет окончательно подтверждена "
@@ -186,3 +208,59 @@ def stats_text(stats) -> str:
         lines += ["", "<b>Популярные услуги</b>"]
         lines += [f"• {esc(t)} — {n}" for t, n in stats.top_services]
     return "\n".join(lines)
+
+
+# ------------------------------------------------------------- кабинет клиента
+def my_booking_label(b: Booking) -> str:
+    when = format_when(b)
+    short = when.split(" · ")[0].split(", ")[-1] if " · " in when else when[:16]
+    label = f"{STATUS_LABELS[b.status].split(' ', 1)[0]} №{b.id} · {short} · {b.service_title}"
+    return label if len(label) <= 58 else label[:57] + "…"
+
+
+def my_booking_card(b: Booking, studio) -> str:
+    lines = [f"📅 <b>Запись №{b.id}</b>", f"Статус: <b>{STATUS_LABELS[b.status]}</b>", "", *_booking_lines(b)]
+    if b.client_confirmed_at:
+        lines.append("✔️ Вы подтвердили, что придёте")
+    if b.status == BookingStatus.NEW:
+        lines += ["", "ℹ️ Время за вами зарезервировано, менеджер скоро подтвердит запись."]
+    return "\n".join(lines)
+
+
+def reminder_text(b: Booking, hours: int) -> str:
+    if hours >= 24 and hours % 24 == 0:
+        left = "завтра" if hours == 24 else f"через {hours // 24} дн."
+    else:
+        left = f"через {hours} ч."
+    return (f"⏰ <b>Напоминаем о визите {left}</b>\n\n"
+            f"🚘 {esc(b.service_title)}\n🚗 {esc(b.car)}\n📅 {esc(format_when(b))}\n\n"
+            "Если планы изменились — перенесите или отмените запись заранее: это освободит время для других клиентов.")
+
+
+def review_request_text(b: Booking) -> str:
+    return (f"🙏 <b>Как прошёл визит?</b>\n\n{esc(b.service_title)}, {esc(b.car)}.\n"
+            "Оцените, пожалуйста, качество работы — это займёт несколько секунд.")
+
+
+def review_thanks_text(rating: int, review_url: str, low: bool) -> str:
+    if low:
+        return ("Спасибо за честную оценку. Нам жаль, что что-то пошло не так — менеджер изучит ситуацию "
+                "и свяжется с вами. Если хотите, напишите, что именно не понравилось.")
+    base = "Спасибо за оценку! Нам важно ваше мнение."
+    if review_url:
+        base += "\nЕсли хотите поддержать нас, оставьте отзыв на публичной странице — это очень помогает."
+    return base
+
+
+def low_rating_alert(b: Booking, rating: int, comment: str, tz_name: str) -> str:
+    lines = [f"⚠️ <b>Низкая оценка: {'⭐' * rating} ({rating}/5)</b>",
+             f"Запись №{b.id} · {esc(b.service_title)}",
+             f"Клиент: {esc(b.name)} · {esc(format_phone(b.phone))}",
+             f'Telegram: <a href="tg://user?id={b.user_id}">{b.user_id}</a>']
+    if comment:
+        lines.append(f"Комментарий: {esc(comment)}")
+    return "\n".join(lines)
+
+
+def stars(n: int) -> str:
+    return "⭐" * n + "☆" * (5 - n)

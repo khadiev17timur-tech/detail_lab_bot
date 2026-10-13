@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
 from database.models import Booking, BookingStatus, Stats, StatusResult
 from database.repository import Repository
 from services.backup import make_backup
+from services.lifecycle import done_jobs
 from services.export import bookings_to_csv
 
 PAGE_SIZE = 8
@@ -28,9 +30,10 @@ class Page:
 
 
 class AdminService:
-    def __init__(self, repo: Repository, admin_ids: Iterable[int]):
+    def __init__(self, repo: Repository, admin_ids: Iterable[int], studio=None):
         self._repo = repo
         self._admin_ids = frozenset(admin_ids)
+        self._studio = studio
 
     @property
     def admin_ids(self) -> frozenset[int]:
@@ -76,7 +79,12 @@ class AdminService:
     async def change_status(self, actor_id: int | None, booking_id: int, new_status: BookingStatus,
                             expected: BookingStatus | None = None) -> StatusResult:
         actor = self._require(actor_id)
-        return await self._repo.set_status(booking_id, new_status, actor_id=actor, expected=expected)
+        jobs = []
+        if new_status == BookingStatus.DONE and self._studio is not None:
+            booking = await self._repo.get_booking(booking_id)
+            if booking is not None:
+                jobs = done_jobs(booking, datetime.now(timezone.utc), self._studio)
+        return await self._repo.set_status(booking_id, new_status, actor_id=actor, expected=expected, jobs=jobs)
 
     async def stats(self, actor_id: int | None) -> Stats:
         self._require(actor_id)

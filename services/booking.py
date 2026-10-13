@@ -7,16 +7,17 @@ from typing import Mapping
 from content.catalog import CAR_CLASSES_BY_ID, SERVICES_BY_ID
 from database.models import NewBooking
 from services.pricing import PricingError, calculate_estimate
-from services.validators import (ANY_TIME, ValidationError, normalize_phone,
+from services.validators import (ValidationError, normalize_phone,
                                  validate_car, validate_comment, validate_name)
 
 # Обязательные поля черновика в порядке прохождения шагов
-REQUIRED_FIELDS = ("service_id", "car", "car_class", "visit_date", "visit_time", "name", "phone")
+REQUIRED_FIELDS = ("service_id", "car", "car_class", "visit_date", "visit_time", "start_at", "end_at", "name", "phone")
 
 # Какому шагу сценария соответствует поле (чтобы вернуть пользователя к ошибке)
 FIELD_TO_STEP = {
     "service_id": "service", "car": "car", "car_class": "car_class",
-    "visit_date": "date", "visit_time": "time", "name": "name", "phone": "phone",
+    "visit_date": "date", "visit_time": "time", "start_at": "time", "end_at": "time",
+    "name": "name", "phone": "phone",
 }
 
 
@@ -48,14 +49,18 @@ def find_problems(draft: Mapping) -> list[str]:
         date.fromisoformat(v)
 
     def check_time(v):
-        if v != ANY_TIME:
-            datetime.strptime(v, "%H:%M")
+        datetime.strptime(v, "%H:%M")        # конкретное время; «любое» больше не допускается
+
+    def check_iso(v):
+        datetime.strptime(v, "%Y-%m-%dT%H:%M")
 
     bad("service_id", check_service)
     bad("car", validate_car)
     bad("car_class", check_class)
     bad("visit_date", check_date)
     bad("visit_time", check_time)
+    bad("start_at", check_iso)
+    bad("end_at", check_iso)
     bad("name", validate_name)
     bad("phone", normalize_phone)
     try:
@@ -72,7 +77,8 @@ def first_problem_step(problems: list[str]) -> str | None:
     return "comment" if "comment" in problems else None
 
 
-def build_new_booking(draft: Mapping, *, user_id: int) -> NewBooking:
+def build_new_booking(draft: Mapping, *, user_id: int, voucher_id: int | None = None,
+                      discount_rub: int = 0) -> NewBooking:
     """Собирает NewBooking из черновика. Бросает ValueError, если данные неполные."""
     problems = find_problems(draft)
     if problems:
@@ -100,4 +106,6 @@ def build_new_booking(draft: Mapping, *, user_id: int) -> NewBooking:
         name=validate_name(draft["name"]), phone=normalize_phone(draft["phone"]),
         comment=validate_comment(draft.get("comment") or ""),
         estimate_rub=estimate_rub, addons=addons, consent=True,
+        start_at=draft["start_at"], end_at=draft["end_at"],
+        voucher_id=voucher_id, discount_rub=discount_rub if voucher_id else 0,
     )

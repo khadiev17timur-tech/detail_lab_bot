@@ -15,6 +15,7 @@ from keyboards.callbacks import Adm
 from services.admin import LAST_N, AdminService
 from services.backup import BackupError
 from services.formatting import admin_booking_card, stats_text
+from services.lifecycle import after_done
 from services.notifications import notify_client_status
 from utils.telegram import ack, message_of, respond
 from utils.timeutils import now_local
@@ -143,6 +144,8 @@ async def cb_set_status(cb: CallbackQuery, callback_data: Adm, admin: AdminServi
         await _show_booking(cb, admin, settings, callback_data.id)
         return
 
+    if new_status == BookingStatus.DONE:
+        await after_done(cb.bot, admin._repo, result.booking, settings.studio)
     delivered = await notify_client_status(cb.bot, result.booking, settings.studio.name)
     if delivered:
         await ack(cb, f"Статус: {STATUS_LABELS[new_status]}")

@@ -1,7 +1,7 @@
 from aiogram import Router
 
-from handlers import (admin, booking, calculator, common, contacts, faq, fallback,
-                      portfolio, prices, services)
+from handlers import (admin, booking, cabinet, calculator, cars, common, contacts, faq, fallback,
+                      portfolio, prices, reviews, services)
 
 
 def build_root_router() -> Router:
@@ -16,6 +16,9 @@ def build_root_router() -> Router:
         portfolio.router,
         faq.router,
         contacts.router,
+        cabinet.router,
+        cars.router,
+        reviews.router,
         booking.router,
         fallback.router,
     )

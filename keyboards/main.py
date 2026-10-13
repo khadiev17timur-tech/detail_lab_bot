@@ -10,10 +10,11 @@ BTN_CALC = "🧮 Рассчитать стоимость"
 BTN_PORTFOLIO = "📸 Портфолио"
 BTN_FAQ = "❓ Частые вопросы"
 BTN_CONTACTS = "📍 Контакты"
+BTN_CABINET = "👤 Мой кабинет"
 BTN_MANAGER = "👨‍💼 Связаться с менеджером"
 
 MENU_TEXTS = frozenset({BTN_SERVICES, BTN_PRICES, BTN_BOOK, BTN_CALC, BTN_PORTFOLIO,
-                        BTN_FAQ, BTN_CONTACTS, BTN_MANAGER})
+                        BTN_FAQ, BTN_CONTACTS, BTN_CABINET, BTN_MANAGER})
 
 
 def main_menu() -> ReplyKeyboardMarkup:
@@ -21,7 +22,7 @@ def main_menu() -> ReplyKeyboardMarkup:
         [BTN_SERVICES, BTN_PRICES],
         [BTN_BOOK, BTN_CALC],
         [BTN_PORTFOLIO, BTN_FAQ],
-        [BTN_CONTACTS],
+        [BTN_CABINET, BTN_CONTACTS],
         [BTN_MANAGER],
     ]
     return ReplyKeyboardMarkup(
